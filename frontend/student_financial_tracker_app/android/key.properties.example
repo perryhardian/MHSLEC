@@ -1,0 +1,4 @@
+storePassword=change-me
+keyPassword=change-me
+keyAlias=student-financial-tracker
+storeFile=C:/path/to/upload-keystore.jks

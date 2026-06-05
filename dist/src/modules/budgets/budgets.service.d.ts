@@ -1,0 +1,84 @@
+import { BudgetPeriod } from '@prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
+import { CreateBudgetDto } from './dto/create-budget.dto';
+import { ListBudgetsQueryDto } from './dto/list-budgets-query.dto';
+import { UpdateBudgetDto } from './dto/update-budget.dto';
+export declare class BudgetsService {
+    private readonly prisma;
+    constructor(prisma: PrismaService);
+    findAll(userId: string, query: ListBudgetsQueryDto): Promise<{
+        limitAmount: number;
+        spentAmount: number;
+        remainingAmount: number;
+        usagePercentage: number;
+        isExceeded: boolean;
+        id: string;
+        userId: string;
+        categoryId: string | null;
+        name: string;
+        period: BudgetPeriod;
+        startDate: Date;
+        endDate: Date;
+        createdAt: Date;
+        updatedAt: Date;
+        category?: unknown;
+    }[]>;
+    findOne(userId: string, budgetId: string): Promise<{
+        limitAmount: number;
+        spentAmount: number;
+        remainingAmount: number;
+        usagePercentage: number;
+        isExceeded: boolean;
+        id: string;
+        userId: string;
+        categoryId: string | null;
+        name: string;
+        period: BudgetPeriod;
+        startDate: Date;
+        endDate: Date;
+        createdAt: Date;
+        updatedAt: Date;
+        category?: unknown;
+    }>;
+    create(userId: string, dto: CreateBudgetDto): Promise<{
+        limitAmount: number;
+        spentAmount: number;
+        remainingAmount: number;
+        usagePercentage: number;
+        isExceeded: boolean;
+        id: string;
+        userId: string;
+        categoryId: string | null;
+        name: string;
+        period: BudgetPeriod;
+        startDate: Date;
+        endDate: Date;
+        createdAt: Date;
+        updatedAt: Date;
+        category?: unknown;
+    }>;
+    update(userId: string, budgetId: string, dto: UpdateBudgetDto): Promise<{
+        limitAmount: number;
+        spentAmount: number;
+        remainingAmount: number;
+        usagePercentage: number;
+        isExceeded: boolean;
+        id: string;
+        userId: string;
+        categoryId: string | null;
+        name: string;
+        period: BudgetPeriod;
+        startDate: Date;
+        endDate: Date;
+        createdAt: Date;
+        updatedAt: Date;
+        category?: unknown;
+    }>;
+    delete(userId: string, budgetId: string): Promise<{
+        message: string;
+    }>;
+    private findOwnedBudgetOrThrow;
+    private ensureExpenseCategoryCanBeUsed;
+    private ensureValidDateRange;
+    private withUsageSummary;
+}

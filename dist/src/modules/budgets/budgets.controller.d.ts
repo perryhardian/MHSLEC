@@ -1,0 +1,80 @@
+import type { AuthUser } from '../auth/types/auth-user.type';
+import { BudgetsService } from './budgets.service';
+import { CreateBudgetDto } from './dto/create-budget.dto';
+import { ListBudgetsQueryDto } from './dto/list-budgets-query.dto';
+import { UpdateBudgetDto } from './dto/update-budget.dto';
+export declare class BudgetsController {
+    private readonly budgetsService;
+    constructor(budgetsService: BudgetsService);
+    findAll(user: AuthUser, query: ListBudgetsQueryDto): Promise<{
+        limitAmount: number;
+        spentAmount: number;
+        remainingAmount: number;
+        usagePercentage: number;
+        isExceeded: boolean;
+        id: string;
+        userId: string;
+        categoryId: string | null;
+        name: string;
+        period: import("@prisma/client").BudgetPeriod;
+        startDate: Date;
+        endDate: Date;
+        createdAt: Date;
+        updatedAt: Date;
+        category?: unknown;
+    }[]>;
+    findOne(user: AuthUser, id: string): Promise<{
+        limitAmount: number;
+        spentAmount: number;
+        remainingAmount: number;
+        usagePercentage: number;
+        isExceeded: boolean;
+        id: string;
+        userId: string;
+        categoryId: string | null;
+        name: string;
+        period: import("@prisma/client").BudgetPeriod;
+        startDate: Date;
+        endDate: Date;
+        createdAt: Date;
+        updatedAt: Date;
+        category?: unknown;
+    }>;
+    create(user: AuthUser, dto: CreateBudgetDto): Promise<{
+        limitAmount: number;
+        spentAmount: number;
+        remainingAmount: number;
+        usagePercentage: number;
+        isExceeded: boolean;
+        id: string;
+        userId: string;
+        categoryId: string | null;
+        name: string;
+        period: import("@prisma/client").BudgetPeriod;
+        startDate: Date;
+        endDate: Date;
+        createdAt: Date;
+        updatedAt: Date;
+        category?: unknown;
+    }>;
+    update(user: AuthUser, id: string, dto: UpdateBudgetDto): Promise<{
+        limitAmount: number;
+        spentAmount: number;
+        remainingAmount: number;
+        usagePercentage: number;
+        isExceeded: boolean;
+        id: string;
+        userId: string;
+        categoryId: string | null;
+        name: string;
+        period: import("@prisma/client").BudgetPeriod;
+        startDate: Date;
+        endDate: Date;
+        createdAt: Date;
+        updatedAt: Date;
+        category?: unknown;
+    }>;
+    delete(user: AuthUser, id: string): Promise<{
+        message: string;
+    }>;
+}

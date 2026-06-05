@@ -1,0 +1,13 @@
+import * as Prisma from './internal/prismaNamespaceBrowser.js';
+export { Prisma };
+export * as $Enums from './enums.js';
+export * from './enums.js';
+export type User = Prisma.UserModel;
+export type Category = Prisma.CategoryModel;
+export type Transaction = Prisma.TransactionModel;
+export type Budget = Prisma.BudgetModel;
+export type SavingsGoal = Prisma.SavingsGoalModel;
+export type SavingsContribution = Prisma.SavingsContributionModel;
+export type Notification = Prisma.NotificationModel;
+export type FinancialHealthSnapshot = Prisma.FinancialHealthSnapshotModel;
+export type RefreshToken = Prisma.RefreshTokenModel;
