@@ -1,6 +1,6 @@
 {
-    "name": "student_financial_tracker_app",
-    "short_name": "student_financial_tracker_app",
+    "name": "SakuAman",
+    "short_name": "SakuAman",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

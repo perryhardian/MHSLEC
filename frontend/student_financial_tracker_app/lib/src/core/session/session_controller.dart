@@ -1,7 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-final sessionControllerProvider =
-    NotifierProvider<SessionController, int>(SessionController.new);
+final sessionControllerProvider = NotifierProvider<SessionController, int>(
+  SessionController.new,
+);
 
 class SessionController extends Notifier<int> {
   @override

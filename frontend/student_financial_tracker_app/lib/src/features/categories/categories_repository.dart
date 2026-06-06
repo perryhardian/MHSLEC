@@ -24,9 +24,10 @@ class CategoriesRepository {
 
   Future<List<Map<String, dynamic>>> findAll(String type) async {
     try {
-      final response = await _dio.get('/categories', queryParameters: {
-        'type': type,
-      });
+      final response = await _dio.get(
+        '/categories',
+        queryParameters: {'type': type},
+      );
       return (response.data as List<dynamic>)
           .map((item) => item as Map<String, dynamic>)
           .toList();
@@ -42,10 +43,7 @@ class CategoriesRepository {
     String? icon,
   }) async {
     try {
-      final data = <String, dynamic>{
-        'name': name,
-        'type': type,
-      };
+      final data = <String, dynamic>{'name': name, 'type': type};
 
       if (color != null) {
         data['color'] = color;

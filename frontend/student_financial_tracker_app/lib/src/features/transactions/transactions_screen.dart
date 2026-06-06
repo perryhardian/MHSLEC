@@ -2,6 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../shared/theme/app_colors.dart';
+import '../../shared/theme/app_spacing.dart';
+import '../../shared/utils/app_formatters.dart';
+import '../../shared/widgets/app_state_widgets.dart';
+import '../../shared/widgets/add_fab.dart';
+import '../../shared/widgets/section_header.dart';
+import '../../shared/widgets/transaction_item.dart';
 import '../dashboard/dashboard_repository.dart';
 import 'transactions_repository.dart';
 
@@ -16,81 +23,58 @@ class TransactionsScreen extends ConsumerWidget {
       body: transactions.when(
         data: (items) {
           if (items.isEmpty) {
-            return const Center(child: Text('Belum ada transaksi.'));
+            return AppEmptyState(
+              icon: Icons.receipt_long_outlined,
+              title: 'Belum ada transaksi',
+              message:
+                  'Catat pemasukan atau pengeluaran pertama agar dashboard mulai terisi.',
+              actionLabel: 'Tambah transaksi',
+              onAction: () => _showAddTransactionDialog(context, ref),
+            );
           }
 
-          return ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: items.length,
-            separatorBuilder: (_, _) => const Divider(height: 1),
-            itemBuilder: (context, index) {
-              final transaction = items[index];
-              final category =
-                  transaction['category'] as Map<String, dynamic>?;
-              final type = transaction['type'] as String;
-              final isIncome = type == 'INCOME';
-
-              return ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: CircleAvatar(
-                  child: Icon(isIncome ? Icons.south_west : Icons.north_east),
-                ),
-                title: Text(transaction['title'] as String),
-                subtitle: Text(category?['name'] as String? ?? type),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      _currency(transaction['amount']),
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: isIncome ? Colors.teal : Colors.redAccent,
-                      ),
-                    ),
-                    PopupMenuButton<String>(
-                      onSelected: (value) {
-                        if (value == 'edit') {
-                          _showEditTransactionDialog(context, ref, transaction);
-                        }
-                        if (value == 'delete') {
-                          _deleteTransaction(context, ref, transaction);
-                        }
-                      },
-                      itemBuilder: (context) => const [
-                        PopupMenuItem(
-                          value: 'edit',
-                          child: ListTile(
-                            leading: Icon(Icons.edit_outlined),
-                            title: Text('Edit'),
-                          ),
-                        ),
-                        PopupMenuItem(
-                          value: 'delete',
-                          child: ListTile(
-                            leading: Icon(Icons.delete_outline),
-                            title: Text('Hapus'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              );
+          return RefreshIndicator(
+            onRefresh: () async {
+              ref.invalidate(transactionsProvider);
+              await ref.read(transactionsProvider.future);
             },
+            child: ListView(
+              padding: AppInsets.screen,
+              children: [
+                _TransactionsSummary(items: items),
+                const SizedBox(height: AppSpacing.xl),
+                SectionHeader(
+                  title: 'Riwayat transaksi',
+                  subtitle: '${items.length} transaksi tercatat',
+                ),
+                for (final transaction in items) ...[
+                  TransactionItem(
+                    title: transaction['title'] as String? ?? '-',
+                    category:
+                        _categoryName(transaction) ?? '${transaction['type']}',
+                    amount: _currency(transaction['amount']),
+                    date: _date(transaction['transactionAt']),
+                    isIncome: transaction['type'] == 'INCOME',
+                    onEdit: () =>
+                        _showEditTransactionDialog(context, ref, transaction),
+                    onDelete: () =>
+                        _deleteTransaction(context, ref, transaction),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                ],
+              ],
+            ),
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Text(error.toString(), textAlign: TextAlign.center),
-          ),
+        loading: () => const AppLoadingState(message: 'Memuat transaksi...'),
+        error: (error, stackTrace) => AppErrorState(
+          message: error.toString(),
+          onRetry: () => ref.invalidate(transactionsProvider),
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: AddFab(
         onPressed: () => _showAddTransactionDialog(context, ref),
-        icon: const Icon(Icons.add),
-        label: const Text('Tambah'),
+        tooltip: 'Tambah transaksi',
       ),
     );
   }
@@ -163,7 +147,8 @@ class TransactionsScreen extends ConsumerWidget {
     WidgetRef ref,
     Map<String, dynamic> transaction,
   ) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed =
+        await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
             title: const Text('Hapus transaksi?'),
@@ -193,9 +178,9 @@ class TransactionsScreen extends ConsumerWidget {
       _invalidateTransactionViews(ref);
     } catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.toString())),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.toString())));
       }
     }
   }
@@ -206,12 +191,148 @@ class TransactionsScreen extends ConsumerWidget {
   }
 
   static String _currency(Object? value) {
-    final number = value is num ? value : num.tryParse('$value') ?? 0;
-    return NumberFormat.currency(
-      locale: 'id_ID',
-      symbol: 'Rp',
-      decimalDigits: 0,
-    ).format(number);
+    return AppFormatters.currency(value);
+  }
+
+  static String _date(Object? value) {
+    final date = DateTime.tryParse('$value');
+    if (date == null) {
+      return '-';
+    }
+    return AppFormatters.shortDate(date.toLocal());
+  }
+
+  static String? _categoryName(Map<String, dynamic> transaction) {
+    final category = transaction['category'] as Map<String, dynamic>?;
+    return category?['name'] as String?;
+  }
+}
+
+class _TransactionsSummary extends StatelessWidget {
+  const _TransactionsSummary({required this.items});
+
+  final List<Map<String, dynamic>> items;
+
+  @override
+  Widget build(BuildContext context) {
+    final income = _sumByType('INCOME');
+    final expense = _sumByType('EXPENSE');
+    final net = income - expense;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Ringkasan transaksi',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              Expanded(
+                child: _SummaryTile(
+                  label: 'Masuk',
+                  value: AppFormatters.currency(income),
+                  icon: Icons.south_west_rounded,
+                  color: AppColors.success,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: _SummaryTile(
+                  label: 'Keluar',
+                  value: AppFormatters.currency(expense),
+                  icon: Icons.north_east_rounded,
+                  color: AppColors.danger,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _SummaryTile(
+            label: 'Selisih',
+            value: AppFormatters.currency(net),
+            icon: Icons.account_balance_wallet_outlined,
+            color: net >= 0 ? AppColors.primary : AppColors.warning,
+            isWide: true,
+          ),
+        ],
+      ),
+    );
+  }
+
+  num _sumByType(String type) {
+    return items
+        .where((item) => item['type'] == type)
+        .fold<num>(
+          0,
+          (total, item) => total + AppFormatters.numberOrZero(item['amount']),
+        );
+  }
+}
+
+class _SummaryTile extends StatelessWidget {
+  const _SummaryTile({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+    this.isWide = false,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+  final bool isWide;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 22),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: AppColors.slate),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    value,
+                    maxLines: 1,
+                    style:
+                        (isWide
+                                ? Theme.of(context).textTheme.titleMedium
+                                : Theme.of(context).textTheme.labelLarge)
+                            ?.copyWith(fontWeight: FontWeight.w900),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -324,14 +445,16 @@ class _DailyExpenseSettingDialogState
             categories.when(
               data: (items) {
                 if (!_isInitialized && items.isNotEmpty) {
-                  final dailyCategory = items.cast<Map<String, dynamic>>().firstWhere(
+                  final dailyCategory = items
+                      .cast<Map<String, dynamic>>()
+                      .firstWhere(
                         (item) =>
                             item['name'] ==
                             (_type == 'EXPENSE'
                                 ? 'Kebutuhan Harian'
                                 : 'Uang Saku'),
                         orElse: () => items.first,
-                  );
+                      );
                   _categoryId ??= dailyCategory['id'] as String;
                   _isInitialized = true;
                 }
@@ -429,7 +552,9 @@ class _DailyExpenseSettingDialogState
     setState(() => _isSaving = true);
 
     try {
-      await ref.read(transactionsRepositoryProvider).updateDailyExpenseSetting(
+      await ref
+          .read(transactionsRepositoryProvider)
+          .updateDailyExpenseSetting(
             categoryId: _categoryId!,
             type: _type,
             amount: amount,
@@ -442,9 +567,9 @@ class _DailyExpenseSettingDialogState
       }
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.toString())),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.toString())));
       }
     } finally {
       if (mounted) {
@@ -616,9 +741,9 @@ class _TransactionDialogState extends ConsumerState<_TransactionDialog> {
         amount == null ||
         amount <= 0 ||
         _categoryId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Lengkapi data transaksi.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Lengkapi data transaksi.')));
       return;
     }
 
@@ -626,7 +751,9 @@ class _TransactionDialogState extends ConsumerState<_TransactionDialog> {
 
     try {
       if (_isEditing) {
-        await ref.read(transactionsRepositoryProvider).update(
+        await ref
+            .read(transactionsRepositoryProvider)
+            .update(
               id: widget.transaction!['id'] as String,
               categoryId: _categoryId!,
               type: _type,
@@ -635,7 +762,9 @@ class _TransactionDialogState extends ConsumerState<_TransactionDialog> {
               transactionAt: _transactionAt,
             );
       } else {
-        await ref.read(transactionsRepositoryProvider).create(
+        await ref
+            .read(transactionsRepositoryProvider)
+            .create(
               categoryId: _categoryId!,
               type: _type,
               amount: amount,
@@ -649,9 +778,9 @@ class _TransactionDialogState extends ConsumerState<_TransactionDialog> {
       }
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.toString())),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.toString())));
       }
     } finally {
       if (mounted) {

@@ -14,10 +14,9 @@ final selectedReportMonthProvider =
 final monthlyReportProvider = FutureProvider<Map<String, dynamic>>((ref) {
   ref.watch(sessionControllerProvider);
   final month = ref.watch(selectedReportMonthProvider);
-  return ref.watch(reportsRepositoryProvider).getMonthlyReport(
-        month: month.month,
-        year: month.year,
-      );
+  return ref
+      .watch(reportsRepositoryProvider)
+      .getMonthlyReport(month: month.month, year: month.year);
 });
 
 class ReportsRepository {
@@ -30,10 +29,10 @@ class ReportsRepository {
     required int year,
   }) async {
     try {
-      final response = await _dio.get('/reports/monthly', queryParameters: {
-        'month': month,
-        'year': year,
-      });
+      final response = await _dio.get(
+        '/reports/monthly',
+        queryParameters: {'month': month, 'year': year},
+      );
       return response.data as Map<String, dynamic>;
     } catch (error) {
       throw mapDioError(error);

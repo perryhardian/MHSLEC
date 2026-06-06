@@ -1,6 +1,6 @@
-# Student Financial Tracker
+# SakuAman
 
-Student Financial Tracker adalah aplikasi pencatatan keuangan mahasiswa dengan backend NestJS modular monolith, PostgreSQL, Prisma ORM, dan frontend Flutter mobile.
+SakuAman adalah aplikasi pencatatan keuangan mahasiswa dengan backend NestJS modular monolith, PostgreSQL, Prisma ORM, dan frontend Flutter mobile.
 
 ## Fitur Utama
 

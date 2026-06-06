@@ -2,6 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../shared/theme/app_colors.dart';
+import '../../shared/theme/app_spacing.dart';
+import '../../shared/utils/app_formatters.dart';
+import '../../shared/widgets/add_fab.dart';
+import '../../shared/widgets/app_state_widgets.dart';
+import '../../shared/widgets/progress_stat_card.dart';
+import '../../shared/widgets/section_header.dart';
+import '../../shared/widgets/status_pill.dart';
 import '../dashboard/dashboard_repository.dart';
 import 'savings_goals_repository.dart';
 
@@ -16,30 +24,45 @@ class SavingsGoalsScreen extends ConsumerWidget {
       body: goals.when(
         data: (items) {
           if (items.isEmpty) {
-            return const Center(child: Text('Belum ada target tabungan.'));
+            return AppEmptyState(
+              icon: Icons.savings_outlined,
+              title: 'Belum ada target tabungan',
+              message:
+                  'Buat target seperti laptop, dana darurat, atau liburan agar progres menabung lebih jelas.',
+              actionLabel: 'Tambah target',
+              onAction: () => _showAddGoalDialog(context, ref),
+            );
           }
 
-          return ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: items.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 12),
-            itemBuilder: (context, index) {
-              return _SavingsGoalTile(goal: items[index]);
+          return RefreshIndicator(
+            onRefresh: () async {
+              ref.invalidate(savingsGoalsProvider);
+              await ref.read(savingsGoalsProvider.future);
             },
+            child: ListView(
+              padding: AppInsets.screen,
+              children: [
+                SectionHeader(
+                  title: 'Target tabungan',
+                  subtitle: '${items.length} target tersimpan',
+                ),
+                for (final item in items) ...[
+                  _SavingsGoalTile(goal: item),
+                  const SizedBox(height: AppSpacing.md),
+                ],
+              ],
+            ),
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Text(error.toString(), textAlign: TextAlign.center),
-          ),
+        loading: () => const AppLoadingState(message: 'Memuat target...'),
+        error: (error, stackTrace) => AppErrorState(
+          message: error.toString(),
+          onRetry: () => ref.invalidate(savingsGoalsProvider),
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: AddFab(
         onPressed: () => _showAddGoalDialog(context, ref),
-        icon: const Icon(Icons.add),
-        label: const Text('Tambah'),
+        tooltip: 'Tambah target',
       ),
     );
   }
@@ -71,99 +94,92 @@ class _SavingsGoalTile extends ConsumerWidget {
     final progress = _number(goal['progressPercentage']).clamp(0, 100) / 100;
     final isCompleted = goal['status'] == 'COMPLETED';
 
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    goal['name'] as String,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
+    return ProgressStatCard(
+      title: goal['name'] as String,
+      subtitle:
+          '${_currency(goal['currentAmount'])} dari ${_currency(goal['targetAmount'])}',
+      progress: progress.toDouble(),
+      color: isCompleted ? AppColors.success : AppColors.savings,
+      icon: Icons.savings_outlined,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _AutoSavingsStatusPill(
+            goalId: goal['id'] as String,
+            isCompleted: isCompleted,
+          ),
+          PopupMenuButton<String>(
+            tooltip: 'Aksi target',
+            onSelected: (value) {
+              if (value == 'edit') {
+                _showEditDialog(context, ref);
+              }
+              if (value == 'delete') {
+                _deleteGoal(context, ref);
+              }
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: 'edit',
+                child: ListTile(
+                  leading: Icon(Icons.edit_outlined),
+                  title: Text('Edit'),
                 ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Chip(
-                      label: Text(isCompleted ? 'Selesai' : 'Aktif'),
-                      visualDensity: VisualDensity.compact,
-                    ),
-                    PopupMenuButton<String>(
-                      onSelected: (value) {
-                        if (value == 'edit') {
-                          _showEditDialog(context, ref);
-                        }
-                        if (value == 'delete') {
-                          _deleteGoal(context, ref);
-                        }
-                      },
-                      itemBuilder: (context) => const [
-                        PopupMenuItem(
-                          value: 'edit',
-                          child: ListTile(
-                            leading: Icon(Icons.edit_outlined),
-                            title: Text('Edit'),
-                          ),
-                        ),
-                        PopupMenuItem(
-                          value: 'delete',
-                          child: ListTile(
-                            leading: Icon(Icons.delete_outline),
-                            title: Text('Hapus'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+              ),
+              PopupMenuItem(
+                value: 'delete',
+                child: ListTile(
+                  leading: Icon(Icons.delete_outline),
+                  title: Text('Hapus'),
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            LinearProgressIndicator(
-              value: progress.toDouble(),
-              minHeight: 8,
-              color: isCompleted ? Colors.teal : Colors.indigo,
-            ),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Terkumpul ${_currency(goal['currentAmount'])}'),
-                Text(
-                  '${_number(goal['progressPercentage']).toStringAsFixed(0)}%',
+              ),
+            ],
+          ),
+        ],
+      ),
+      footer: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Sisa ${_currency(goal['remainingAmount'])}',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: AppColors.slate),
                 ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text('Target ${_currency(goal['targetAmount'])}'),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton.icon(
-                  onPressed: isCompleted
-                      ? null
-                      : () => _showAutoContributionDialog(context, ref),
-                  icon: const Icon(Icons.autorenew),
-                  label: const Text('Auto'),
-                ),
-                const SizedBox(width: 8),
-                TextButton.icon(
-                  onPressed: isCompleted
-                      ? null
-                      : () => _showContributionDialog(context, ref),
-                  icon: const Icon(Icons.savings_outlined),
-                  label: const Text('Setor'),
-                ),
-              ],
-            ),
-          ],
-        ),
+              ),
+              StatusPill(
+                label:
+                    '${_number(goal['progressPercentage']).toStringAsFixed(0)}%',
+                color: isCompleted ? AppColors.success : AppColors.savings,
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Wrap(
+            alignment: WrapAlignment.end,
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              OutlinedButton.icon(
+                onPressed: isCompleted
+                    ? null
+                    : () => _showAutoContributionDialog(context, ref),
+                icon: const Icon(Icons.autorenew),
+                label: const Text('Auto'),
+              ),
+              FilledButton.icon(
+                onPressed: isCompleted
+                    ? null
+                    : () => _showContributionDialog(context, ref),
+                icon: const Icon(Icons.savings_outlined),
+                label: const Text('Setor'),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -180,7 +196,8 @@ class _SavingsGoalTile extends ConsumerWidget {
   }
 
   Future<void> _deleteGoal(BuildContext context, WidgetRef ref) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed =
+        await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
             title: const Text('Hapus target?'),
@@ -210,9 +227,9 @@ class _SavingsGoalTile extends ConsumerWidget {
       SavingsGoalsScreen._invalidateSavingsViews(ref);
     } catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.toString())),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.toString())));
       }
     }
   }
@@ -248,15 +265,57 @@ class _SavingsGoalTile extends ConsumerWidget {
   }
 
   static num _number(Object? value) {
-    return value is num ? value : num.tryParse('$value') ?? 0;
+    return AppFormatters.numberOrZero(value);
   }
 
   static String _currency(Object? value) {
-    return NumberFormat.currency(
-      locale: 'id_ID',
-      symbol: 'Rp',
-      decimalDigits: 0,
-    ).format(_number(value));
+    return AppFormatters.currency(value);
+  }
+}
+
+class _AutoSavingsStatusPill extends ConsumerWidget {
+  const _AutoSavingsStatusPill({
+    required this.goalId,
+    required this.isCompleted,
+  });
+
+  final String goalId;
+  final bool isCompleted;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (isCompleted) {
+      return const StatusPill(
+        label: 'Selesai',
+        color: AppColors.success,
+        icon: Icons.check_circle_outline,
+      );
+    }
+
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: ref
+          .read(savingsGoalsRepositoryProvider)
+          .getAutoContribution(goalId),
+      builder: (context, snapshot) {
+        final setting = snapshot.data;
+        final hasAuto = setting != null;
+        final isActive = setting?['isActive'] == true;
+
+        if (!hasAuto) {
+          return const StatusPill(
+            label: 'Aktif',
+            color: AppColors.savings,
+            icon: Icons.flag_outlined,
+          );
+        }
+
+        return StatusPill(
+          label: isActive ? 'Aktif' : 'Nonaktif',
+          color: isActive ? AppColors.savings : AppColors.muted,
+          icon: isActive ? Icons.flag_outlined : Icons.pause_circle_outline,
+        );
+      },
+    );
   }
 }
 
@@ -294,7 +353,8 @@ class _AutoContributionDialogState
         final data = snapshot.data;
         if (!_isInitialized && data != null) {
           _amountController.text = '${data['amount'] ?? ''}';
-          _startDate = DateTime.tryParse('${data['startDate']}') ?? DateTime.now();
+          _startDate =
+              DateTime.tryParse('${data['startDate']}') ?? DateTime.now();
           _isActive = data['isActive'] == true;
           _isInitialized = true;
         }
@@ -330,8 +390,9 @@ class _AutoContributionDialogState
           ),
           actions: [
             TextButton(
-              onPressed:
-                  _isSaving ? null : () => Navigator.of(context).pop(false),
+              onPressed: _isSaving
+                  ? null
+                  : () => Navigator.of(context).pop(false),
               child: const Text('Batal'),
             ),
             FilledButton(
@@ -380,7 +441,9 @@ class _AutoContributionDialogState
     setState(() => _isSaving = true);
 
     try {
-      await ref.read(savingsGoalsRepositoryProvider).updateAutoContribution(
+      await ref
+          .read(savingsGoalsRepositoryProvider)
+          .updateAutoContribution(
             goalId: widget.goalId,
             amount: amount,
             startDate: _startDate,
@@ -392,9 +455,9 @@ class _AutoContributionDialogState
       }
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.toString())),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.toString())));
       }
     } finally {
       if (mounted) {
@@ -488,7 +551,10 @@ class _SavingsGoalDialogState extends ConsumerState<_SavingsGoalDialog> {
                 items: const [
                   DropdownMenuItem(value: 'ACTIVE', child: Text('Aktif')),
                   DropdownMenuItem(value: 'COMPLETED', child: Text('Selesai')),
-                  DropdownMenuItem(value: 'CANCELLED', child: Text('Dibatalkan')),
+                  DropdownMenuItem(
+                    value: 'CANCELLED',
+                    child: Text('Dibatalkan'),
+                  ),
                 ],
                 onChanged: (value) {
                   if (value != null) {
@@ -522,8 +588,7 @@ class _SavingsGoalDialogState extends ConsumerState<_SavingsGoalDialog> {
   Future<void> _pickTargetDate() async {
     final selected = await showDatePicker(
       context: context,
-      initialDate:
-          _targetDate ?? DateTime.now().add(const Duration(days: 30)),
+      initialDate: _targetDate ?? DateTime.now().add(const Duration(days: 30)),
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 3650)),
     );
@@ -549,7 +614,9 @@ class _SavingsGoalDialogState extends ConsumerState<_SavingsGoalDialog> {
 
     try {
       if (_isEditing) {
-        await ref.read(savingsGoalsRepositoryProvider).update(
+        await ref
+            .read(savingsGoalsRepositoryProvider)
+            .update(
               id: widget.goal!['id'] as String,
               name: _nameController.text.trim(),
               targetAmount: targetAmount,
@@ -557,7 +624,9 @@ class _SavingsGoalDialogState extends ConsumerState<_SavingsGoalDialog> {
               status: _status,
             );
       } else {
-        await ref.read(savingsGoalsRepositoryProvider).create(
+        await ref
+            .read(savingsGoalsRepositoryProvider)
+            .create(
               name: _nameController.text.trim(),
               targetAmount: targetAmount,
               targetDate: _targetDate,
@@ -569,9 +638,9 @@ class _SavingsGoalDialogState extends ConsumerState<_SavingsGoalDialog> {
       }
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.toString())),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.toString())));
       }
     } finally {
       if (mounted) {
@@ -663,7 +732,9 @@ class _AddContributionDialogState
     setState(() => _isSaving = true);
 
     try {
-      await ref.read(savingsGoalsRepositoryProvider).addContribution(
+      await ref
+          .read(savingsGoalsRepositoryProvider)
+          .addContribution(
             goalId: widget.goalId,
             amount: amount,
             note: _noteController.text,
@@ -675,9 +746,9 @@ class _AddContributionDialogState
       }
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.toString())),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.toString())));
       }
     } finally {
       if (mounted) {

@@ -36,9 +36,7 @@ class ProfileRepository {
     int? timeSkipDays,
   }) async {
     try {
-      final data = <String, dynamic>{
-        'name': name,
-      };
+      final data = <String, dynamic>{'name': name};
 
       if (phoneNumber != null) {
         data['phoneNumber'] = phoneNumber;

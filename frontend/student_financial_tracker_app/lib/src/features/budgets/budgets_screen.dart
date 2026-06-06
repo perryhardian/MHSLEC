@@ -2,6 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../shared/theme/app_colors.dart';
+import '../../shared/theme/app_spacing.dart';
+import '../../shared/utils/app_formatters.dart';
+import '../../shared/widgets/add_fab.dart';
+import '../../shared/widgets/app_state_widgets.dart';
+import '../../shared/widgets/section_header.dart';
 import '../dashboard/dashboard_repository.dart';
 import '../transactions/transactions_repository.dart';
 import 'budgets_repository.dart';
@@ -17,30 +23,45 @@ class BudgetsScreen extends ConsumerWidget {
       body: budgets.when(
         data: (items) {
           if (items.isEmpty) {
-            return const Center(child: Text('Belum ada budget.'));
+            return AppEmptyState(
+              icon: Icons.account_balance_wallet_outlined,
+              title: 'Belum ada budget',
+              message:
+                  'Buat limit bulanan agar pengeluaran per kategori lebih terkendali.',
+              actionLabel: 'Tambah budget',
+              onAction: () => _showAddBudgetDialog(context, ref),
+            );
           }
 
-          return ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: items.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 12),
-            itemBuilder: (context, index) {
-              return _BudgetTile(budget: items[index]);
+          return RefreshIndicator(
+            onRefresh: () async {
+              ref.invalidate(budgetsProvider);
+              await ref.read(budgetsProvider.future);
             },
+            child: ListView(
+              padding: AppInsets.screen,
+              children: [
+                SectionHeader(
+                  title: 'Budget management',
+                  subtitle: '${items.length} budget aktif',
+                ),
+                for (final item in items) ...[
+                  _BudgetTile(budget: item),
+                  const SizedBox(height: AppSpacing.md),
+                ],
+              ],
+            ),
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Text(error.toString(), textAlign: TextAlign.center),
-          ),
+        loading: () => const AppLoadingState(message: 'Memuat budget...'),
+        error: (error, stackTrace) => AppErrorState(
+          message: error.toString(),
+          onRetry: () => ref.invalidate(budgetsProvider),
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: AddFab(
         onPressed: () => _showAddBudgetDialog(context, ref),
-        icon: const Icon(Icons.add),
-        label: const Text('Tambah'),
+        tooltip: 'Tambah budget',
       ),
     );
   }
@@ -70,89 +91,108 @@ class _BudgetTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final category = budget['category'] as Map<String, dynamic>?;
-    final usedPercent = _number(budget['usagePercentage']).clamp(0, 100) / 100;
+    final usagePercentage = _number(budget['usagePercentage']);
+    final usedPercent = usagePercentage.clamp(0, 100) / 100;
     final isExceeded = budget['isExceeded'] == true;
+    final color = isExceeded ? AppColors.danger : AppColors.primary;
 
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        budget['name'] as String,
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(category?['name'] as String? ?? 'Budget umum'),
-                    ],
+    return Container(
+      padding: const EdgeInsets.fromLTRB(4, 8, 4, 16),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.divider)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  budget['name'] as String,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      '${_number(budget['usagePercentage']).toStringAsFixed(0)}%',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: isExceeded ? Colors.redAccent : Colors.teal,
-                      ),
-                    ),
-                    PopupMenuButton<String>(
-                      onSelected: (value) {
-                        if (value == 'edit') {
-                          _showEditDialog(context, ref);
-                        }
-                        if (value == 'delete') {
-                          _deleteBudget(context, ref);
-                        }
-                      },
-                      itemBuilder: (context) => const [
-                        PopupMenuItem(
-                          value: 'edit',
-                          child: ListTile(
-                            leading: Icon(Icons.edit_outlined),
-                            title: Text('Edit'),
-                          ),
-                        ),
-                        PopupMenuItem(
-                          value: 'delete',
-                          child: ListTile(
-                            leading: Icon(Icons.delete_outline),
-                            title: Text('Hapus'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+              ),
+              Text(
+                '${usagePercentage.toStringAsFixed(0)}%',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w900,
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            LinearProgressIndicator(
+              ),
+              PopupMenuButton<String>(
+                tooltip: 'Aksi budget',
+                onSelected: (value) {
+                  if (value == 'edit') {
+                    _showEditDialog(context, ref);
+                  }
+                  if (value == 'delete') {
+                    _deleteBudget(context, ref);
+                  }
+                },
+                itemBuilder: (context) => const [
+                  PopupMenuItem(
+                    value: 'edit',
+                    child: ListTile(
+                      leading: Icon(Icons.edit_outlined),
+                      title: Text('Edit'),
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: ListTile(
+                      leading: Icon(Icons.delete_outline),
+                      title: Text('Hapus'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          Text(
+            category?['name'] as String? ?? 'Budget umum',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AppColors.slate),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              minHeight: 12,
               value: usedPercent.toDouble(),
-              minHeight: 8,
-              color: isExceeded ? Colors.redAccent : Colors.teal,
+              color: color,
+              backgroundColor: AppColors.divider,
             ),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Terpakai ${_currency(budget['spentAmount'])}'),
-                Text('Sisa ${_currency(budget['remainingAmount'])}'),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text('Limit ${_currency(budget['limitAmount'])}'),
-          ],
-        ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Terpakai ${_currency(budget['spentAmount'])} | ${_currency(budget['limitAmount'])}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: AppColors.slate),
+                ),
+              ),
+              Text(
+                isExceeded
+                    ? 'Lebih ${_currency(_number(budget['remainingAmount']).abs())}'
+                    : 'Sisa ${_currency(budget['remainingAmount'])}',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: isExceeded ? AppColors.danger : AppColors.success,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -169,7 +209,8 @@ class _BudgetTile extends ConsumerWidget {
   }
 
   Future<void> _deleteBudget(BuildContext context, WidgetRef ref) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed =
+        await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
             title: const Text('Hapus budget?'),
@@ -197,23 +238,19 @@ class _BudgetTile extends ConsumerWidget {
       BudgetsScreen._invalidateBudgetViews(ref);
     } catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.toString())),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.toString())));
       }
     }
   }
 
   static num _number(Object? value) {
-    return value is num ? value : num.tryParse('$value') ?? 0;
+    return AppFormatters.numberOrZero(value);
   }
 
   static String _currency(Object? value) {
-    return NumberFormat.currency(
-      locale: 'id_ID',
-      symbol: 'Rp',
-      decimalDigits: 0,
-    ).format(_number(value));
+    return AppFormatters.currency(value);
   }
 }
 
@@ -249,9 +286,11 @@ class _BudgetDialogState extends ConsumerState<_BudgetDialog> {
       text: budget?['limitAmount']?.toString() ?? '',
     );
     _categoryId = category?['id'] as String?;
-    _startDate = DateTime.tryParse('${budget?['startDate']}') ??
+    _startDate =
+        DateTime.tryParse('${budget?['startDate']}') ??
         DateTime(now.year, now.month);
-    _endDate = DateTime.tryParse('${budget?['endDate']}') ??
+    _endDate =
+        DateTime.tryParse('${budget?['endDate']}') ??
         DateTime(now.year, now.month + 1, 0, 23, 59, 59);
   }
 
@@ -400,9 +439,9 @@ class _BudgetDialogState extends ConsumerState<_BudgetDialog> {
         limit == null ||
         limit <= 0 ||
         _endDate.isBefore(_startDate)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Lengkapi data budget.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Lengkapi data budget.')));
       return;
     }
 
@@ -410,7 +449,9 @@ class _BudgetDialogState extends ConsumerState<_BudgetDialog> {
 
     try {
       if (_isEditing) {
-        await ref.read(budgetsRepositoryProvider).update(
+        await ref
+            .read(budgetsRepositoryProvider)
+            .update(
               id: widget.budget!['id'] as String,
               categoryId: _categoryId,
               name: _nameController.text.trim(),
@@ -419,7 +460,9 @@ class _BudgetDialogState extends ConsumerState<_BudgetDialog> {
               endDate: _endDate,
             );
       } else {
-        await ref.read(budgetsRepositoryProvider).create(
+        await ref
+            .read(budgetsRepositoryProvider)
+            .create(
               categoryId: _categoryId,
               name: _nameController.text.trim(),
               limitAmount: limit,
@@ -433,9 +476,9 @@ class _BudgetDialogState extends ConsumerState<_BudgetDialog> {
       }
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.toString())),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.toString())));
       }
     } finally {
       if (mounted) {

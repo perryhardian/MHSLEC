@@ -42,9 +42,7 @@ export class TransactionsService {
         include: {
           category: true,
         },
-        orderBy: {
-          transactionAt: 'desc',
-        },
+        orderBy: [{ transactionAt: 'desc' }, { createdAt: 'desc' }],
         skip,
         take: limit,
       }),

@@ -13,22 +13,23 @@ final transactionsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) {
   return ref.watch(transactionsRepositoryProvider).findAll();
 });
 
-final expenseCategoriesProvider = FutureProvider<List<Map<String, dynamic>>>(
-  (ref) {
-    ref.watch(sessionControllerProvider);
-    return ref.watch(transactionsRepositoryProvider).findCategories('EXPENSE');
-  },
-);
+final expenseCategoriesProvider = FutureProvider<List<Map<String, dynamic>>>((
+  ref,
+) {
+  ref.watch(sessionControllerProvider);
+  return ref.watch(transactionsRepositoryProvider).findCategories('EXPENSE');
+});
 
-final incomeCategoriesProvider = FutureProvider<List<Map<String, dynamic>>>(
-  (ref) {
-    ref.watch(sessionControllerProvider);
-    return ref.watch(transactionsRepositoryProvider).findCategories('INCOME');
-  },
-);
+final incomeCategoriesProvider = FutureProvider<List<Map<String, dynamic>>>((
+  ref,
+) {
+  ref.watch(sessionControllerProvider);
+  return ref.watch(transactionsRepositoryProvider).findCategories('INCOME');
+});
 
-final dailyExpenseSettingProvider =
-    FutureProvider<Map<String, dynamic>?>((ref) {
+final dailyExpenseSettingProvider = FutureProvider<Map<String, dynamic>?>((
+  ref,
+) {
   ref.watch(sessionControllerProvider);
   return ref.watch(transactionsRepositoryProvider).getDailyExpenseSetting();
 });
@@ -52,9 +53,10 @@ class TransactionsRepository {
 
   Future<List<Map<String, dynamic>>> findCategories(String type) async {
     try {
-      final response = await _dio.get('/categories', queryParameters: {
-        'type': type,
-      });
+      final response = await _dio.get(
+        '/categories',
+        queryParameters: {'type': type},
+      );
       return (response.data as List<dynamic>)
           .map((item) => item as Map<String, dynamic>)
           .toList();
@@ -71,13 +73,16 @@ class TransactionsRepository {
     required DateTime transactionAt,
   }) async {
     try {
-      await _dio.post('/transactions', data: {
-        'categoryId': categoryId,
-        'type': type,
-        'amount': amount,
-        'title': title,
-        'transactionAt': transactionAt.toIso8601String(),
-      });
+      await _dio.post(
+        '/transactions',
+        data: {
+          'categoryId': categoryId,
+          'type': type,
+          'amount': amount,
+          'title': title,
+          'transactionAt': transactionAt.toIso8601String(),
+        },
+      );
     } catch (error) {
       throw mapDioError(error);
     }
@@ -92,13 +97,16 @@ class TransactionsRepository {
     required DateTime transactionAt,
   }) async {
     try {
-      await _dio.patch('/transactions/$id', data: {
-        'categoryId': categoryId,
-        'type': type,
-        'amount': amount,
-        'title': title,
-        'transactionAt': transactionAt.toIso8601String(),
-      });
+      await _dio.patch(
+        '/transactions/$id',
+        data: {
+          'categoryId': categoryId,
+          'type': type,
+          'amount': amount,
+          'title': title,
+          'transactionAt': transactionAt.toIso8601String(),
+        },
+      );
     } catch (error) {
       throw mapDioError(error);
     }

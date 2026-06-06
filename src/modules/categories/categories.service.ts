@@ -19,12 +19,15 @@ export class CategoriesService {
       'Kebutuhan Bulanan',
       'Belanja',
     ];
+    const defaultCategoryFilter =
+      type === TransactionType.EXPENSE
+        ? { userId: null, name: { in: allowedExpenseNames } }
+        : { userId: null };
 
     return this.prisma.category.findMany({
       where: {
         type,
-        name: type === TransactionType.EXPENSE ? { in: allowedExpenseNames } : undefined,
-        OR: [{ userId: null }, { userId }],
+        OR: [defaultCategoryFilter, { userId }],
       },
       orderBy: [{ kind: 'asc' }, { name: 'asc' }],
     });

@@ -37,14 +37,17 @@ class BudgetsRepository {
     required DateTime endDate,
   }) async {
     try {
-      await _dio.post('/budgets', data: {
-        'categoryId': categoryId,
-        'name': name,
-        'limitAmount': limitAmount,
-        'period': 'MONTHLY',
-        'startDate': startDate.toIso8601String(),
-        'endDate': endDate.toIso8601String(),
-      });
+      await _dio.post(
+        '/budgets',
+        data: {
+          'categoryId': categoryId,
+          'name': name,
+          'limitAmount': limitAmount,
+          'period': 'MONTHLY',
+          'startDate': startDate.toIso8601String(),
+          'endDate': endDate.toIso8601String(),
+        },
+      );
     } catch (error) {
       throw mapDioError(error);
     }
@@ -59,14 +62,17 @@ class BudgetsRepository {
     required DateTime endDate,
   }) async {
     try {
-      await _dio.patch('/budgets/$id', data: {
-        'categoryId': categoryId,
-        'name': name,
-        'limitAmount': limitAmount,
-        'period': 'MONTHLY',
-        'startDate': startDate.toIso8601String(),
-        'endDate': endDate.toIso8601String(),
-      });
+      await _dio.patch(
+        '/budgets/$id',
+        data: {
+          'categoryId': categoryId,
+          'name': name,
+          'limitAmount': limitAmount,
+          'period': 'MONTHLY',
+          'startDate': startDate.toIso8601String(),
+          'endDate': endDate.toIso8601String(),
+        },
+      );
     } catch (error) {
       throw mapDioError(error);
     }

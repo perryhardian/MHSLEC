@@ -24,11 +24,13 @@ let CategoriesService = class CategoriesService {
             'Kebutuhan Bulanan',
             'Belanja',
         ];
+        const defaultCategoryFilter = type === client_1.TransactionType.EXPENSE
+            ? { userId: null, name: { in: allowedExpenseNames } }
+            : { userId: null };
         return this.prisma.category.findMany({
             where: {
                 type,
-                name: type === client_1.TransactionType.EXPENSE ? { in: allowedExpenseNames } : undefined,
-                OR: [{ userId: null }, { userId }],
+                OR: [defaultCategoryFilter, { userId }],
             },
             orderBy: [{ kind: 'asc' }, { name: 'asc' }],
         });

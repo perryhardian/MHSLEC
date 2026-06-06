@@ -4,8 +4,9 @@ import '../../core/session/session_controller.dart';
 import '../../core/storage/token_storage.dart';
 import 'auth_repository.dart';
 
-final authControllerProvider =
-    AsyncNotifierProvider<AuthController, AuthState>(AuthController.new);
+final authControllerProvider = AsyncNotifierProvider<AuthController, AuthState>(
+  AuthController.new,
+);
 
 class AuthController extends AsyncNotifier<AuthState> {
   @override
@@ -57,10 +58,7 @@ class AuthController extends AsyncNotifier<AuthState> {
 }
 
 class AuthState {
-  const AuthState({
-    required this.isAuthenticated,
-    this.successMessage,
-  });
+  const AuthState({required this.isAuthenticated, this.successMessage});
 
   final bool isAuthenticated;
   final String? successMessage;

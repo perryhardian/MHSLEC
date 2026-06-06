@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../shared/theme/app_colors.dart';
+import '../../shared/theme/app_spacing.dart';
+import '../../shared/widgets/add_fab.dart';
+import '../../shared/widgets/app_card.dart';
+import '../../shared/widgets/app_state_widgets.dart';
+import '../../shared/widgets/status_pill.dart';
 import '../transactions/transactions_repository.dart';
 import 'categories_repository.dart';
 
@@ -41,32 +47,42 @@ class CategoriesScreen extends ConsumerWidget {
           ),
           Expanded(
             child: categories.when(
-              data: (items) => RefreshIndicator(
-                onRefresh: () async => ref.invalidate(categoriesProvider),
-                child: ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
-                  itemCount: items.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 8),
-                  itemBuilder: (context, index) {
-                    return _CategoryTile(category: items[index]);
+              data: (items) {
+                if (items.isEmpty) {
+                  return const AppEmptyState(
+                    icon: Icons.category_outlined,
+                    title: 'Belum ada kategori',
+                    message: 'Kategori transaksi akan muncul di sini.',
+                  );
+                }
+
+                return RefreshIndicator(
+                  onRefresh: () async {
+                    ref.invalidate(categoriesProvider);
+                    await ref.read(categoriesProvider.future);
                   },
-                ),
-              ),
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, stackTrace) => Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text(error.toString(), textAlign: TextAlign.center),
-                ),
+                  child: ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
+                    itemCount: items.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 8),
+                    itemBuilder: (context, index) =>
+                        _CategoryTile(category: items[index]),
+                  ),
+                );
+              },
+              loading: () =>
+                  const AppLoadingState(message: 'Memuat kategori...'),
+              error: (error, stackTrace) => AppErrorState(
+                message: error.toString(),
+                onRetry: () => ref.invalidate(categoriesProvider),
               ),
             ),
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: AddFab(
         onPressed: () => _showAddCategoryDialog(context, ref, selectedType),
-        icon: const Icon(Icons.add),
-        label: const Text('Tambah'),
+        tooltip: 'Tambah kategori',
       ),
     );
   }
@@ -98,17 +114,29 @@ class _CategoryTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isCustom = category['kind'] == 'CUSTOM';
     final color = _parseColor(category['color'] as String?);
-    final tile = Card(
-      margin: EdgeInsets.zero,
+    final type = category['type'] as String? ?? 'EXPENSE';
+    final tile = AppCard(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
       child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: color.withValues(alpha: 0.18),
-          foregroundColor: color,
-          child: const Icon(Icons.label_outline),
+        contentPadding: EdgeInsets.zero,
+        leading: Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.14),
+            borderRadius: BorderRadius.circular(AppRadius.md),
+          ),
+          child: Icon(Icons.label_outline, color: color),
         ),
         title: Text(category['name'] as String),
         subtitle: Text(isCustom ? 'Custom' : 'Default'),
-        trailing: isCustom ? const Icon(Icons.swipe_left) : null,
+        trailing: StatusPill(
+          label: type == 'INCOME' ? 'Income' : 'Expense',
+          color: type == 'INCOME' ? AppColors.success : AppColors.danger,
+        ),
       ),
     );
 
@@ -122,7 +150,10 @@ class _CategoryTile extends ConsumerWidget {
       background: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
-        color: Colors.redAccent,
+        decoration: BoxDecoration(
+          color: AppColors.danger,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+        ),
         child: const Icon(Icons.delete, color: Colors.white),
       ),
       confirmDismiss: (_) => _confirmDelete(context),
@@ -163,7 +194,7 @@ class _CategoryTile extends ConsumerWidget {
 
   Color _parseColor(String? value) {
     if (value == null || !value.startsWith('#') || value.length != 7) {
-      return Colors.teal;
+      return AppColors.primary;
     }
     return Color(int.parse('FF${value.substring(1)}', radix: 16));
   }
@@ -207,9 +238,21 @@ class _AddCategoryDialogState extends ConsumerState<_AddCategoryDialog> {
             const SizedBox(height: 12),
             SegmentedButton<String>(
               segments: const [
-                ButtonSegment(value: '#0F766E', label: Text('Hijau')),
-                ButtonSegment(value: '#4F46E5', label: Text('Biru')),
-                ButtonSegment(value: '#DC2626', label: Text('Merah')),
+                ButtonSegment(
+                  value: '#0F766E',
+                  label: _ColorOption(color: AppColors.primary, label: 'Hijau'),
+                ),
+                ButtonSegment(
+                  value: '#D4A017',
+                  label: _ColorOption(
+                    color: AppColors.savings,
+                    label: 'Kuning',
+                  ),
+                ),
+                ButtonSegment(
+                  value: '#DC2626',
+                  label: _ColorOption(color: AppColors.danger, label: 'Merah'),
+                ),
               ],
               selected: {_color},
               onSelectionChanged: (value) {
@@ -249,7 +292,9 @@ class _AddCategoryDialogState extends ConsumerState<_AddCategoryDialog> {
     setState(() => _isSaving = true);
 
     try {
-      await ref.read(categoriesRepositoryProvider).create(
+      await ref
+          .read(categoriesRepositoryProvider)
+          .create(
             name: _nameController.text.trim(),
             type: widget.type,
             color: _color,
@@ -261,14 +306,42 @@ class _AddCategoryDialogState extends ConsumerState<_AddCategoryDialog> {
       }
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.toString())),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.toString())));
       }
     } finally {
       if (mounted) {
         setState(() => _isSaving = false);
       }
     }
+  }
+}
+
+class _ColorOption extends StatelessWidget {
+  const _ColorOption({required this.color, required this.label});
+
+  final Color color;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(AppRadius.xs),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.xs),
+        Flexible(
+          child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+        ),
+      ],
+    );
   }
 }

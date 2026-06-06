@@ -109,7 +109,9 @@ class SavingsGoalsRepository {
 
   Future<Map<String, dynamic>?> getAutoContribution(String goalId) async {
     try {
-      final response = await _dio.get('/savings-goals/$goalId/auto-contribution');
+      final response = await _dio.get(
+        '/savings-goals/$goalId/auto-contribution',
+      );
       return response.data as Map<String, dynamic>?;
     } catch (error) {
       throw mapDioError(error);

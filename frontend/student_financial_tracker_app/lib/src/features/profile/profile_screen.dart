@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
+import '../../shared/theme/app_colors.dart';
+import '../../shared/theme/app_spacing.dart';
+import '../../shared/utils/app_formatters.dart';
+import '../../shared/widgets/app_buttons.dart';
+import '../../shared/widgets/app_card.dart';
+import '../../shared/widgets/app_state_widgets.dart';
+import '../../shared/widgets/section_header.dart';
 import '../categories/categories_screen.dart';
 import '../dashboard/dashboard_repository.dart';
 import '../notifications/notifications_repository.dart';
@@ -21,33 +27,19 @@ class ProfileScreen extends ConsumerWidget {
       appBar: AppBar(title: const Text('Profil')),
       body: profile.when(
         data: (data) => RefreshIndicator(
-          onRefresh: () async => ref.invalidate(profileProvider),
+          onRefresh: () async {
+            ref.invalidate(profileProvider);
+            await ref.read(profileProvider.future);
+          },
           child: ListView(
-            padding: const EdgeInsets.all(16),
+            padding: AppInsets.screen,
             children: [
-              Card(
-                margin: EdgeInsets.zero,
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      CircleAvatar(
-                        radius: 28,
-                        child: Text(_initial(data['name'] as String)),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        data['name'] as String,
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(data['email'] as String),
-                    ],
-                  ),
-                ),
+              _ProfileHero(data: data),
+              const SizedBox(height: AppSpacing.xl),
+              const SectionHeader(
+                title: 'Informasi pengguna',
+                subtitle: 'Data identitas dan kontak',
               ),
-              const SizedBox(height: 16),
               _ProfileItem(
                 icon: Icons.school_outlined,
                 label: 'Universitas',
@@ -57,6 +49,11 @@ class ProfileScreen extends ConsumerWidget {
                 icon: Icons.phone_outlined,
                 label: 'Nomor HP',
                 value: data['phoneNumber'] as String? ?? '-',
+              ),
+              const SizedBox(height: AppSpacing.xl),
+              const SectionHeader(
+                title: 'Preferensi finansial',
+                subtitle: 'Dipakai untuk score dan reminder',
               ),
               _ProfileItem(
                 icon: Icons.payments_outlined,
@@ -73,37 +70,48 @@ class ProfileScreen extends ConsumerWidget {
                 label: 'Timeskip',
                 value: '${data['timeSkipDays'] ?? 0} hari',
               ),
-              const SizedBox(height: 16),
-              FilledButton.icon(
-                onPressed: () => _showTimeSkipDialog(context, ref, data),
-                icon: const Icon(Icons.fast_forward_outlined),
-                label: const Text('Timeskip'),
-              ),
-              const SizedBox(height: 12),
-              OutlinedButton.icon(
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const CategoriesScreen(),
-                  ),
+              const SizedBox(height: AppSpacing.xl),
+              AppCard(
+                padding: AppInsets.cardLarge,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Pengaturan cepat',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    AppPrimaryButton(
+                      label: 'Edit Profil',
+                      icon: Icons.edit_outlined,
+                      onPressed: () => _showEditDialog(context, ref, data),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    AppSecondaryButton(
+                      label: 'Kelola Kategori',
+                      icon: Icons.category_outlined,
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const CategoriesScreen(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    AppSecondaryButton(
+                      label: 'Timeskip',
+                      icon: Icons.fast_forward_outlined,
+                      onPressed: () => _showTimeSkipDialog(context, ref, data),
+                    ),
+                  ],
                 ),
-                icon: const Icon(Icons.category_outlined),
-                label: const Text('Kelola Kategori'),
-              ),
-              const SizedBox(height: 12),
-              FilledButton.icon(
-                onPressed: () => _showEditDialog(context, ref, data),
-                icon: const Icon(Icons.edit_outlined),
-                label: const Text('Edit Profil'),
               ),
             ],
           ),
         ),
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Text(error.toString(), textAlign: TextAlign.center),
-          ),
+        loading: () => const AppLoadingState(message: 'Memuat profil...'),
+        error: (error, stackTrace) => AppErrorState(
+          message: error.toString(),
+          onRetry: () => ref.invalidate(profileProvider),
         ),
       ),
     );
@@ -156,6 +164,70 @@ class ProfileScreen extends ConsumerWidget {
   }
 }
 
+class _ProfileHero extends StatelessWidget {
+  const _ProfileHero({required this.data});
+
+  final Map<String, dynamic> data;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = data['name'] as String? ?? '-';
+    final email = data['email'] as String? ?? '-';
+
+    return AppCard(
+      color: AppColors.ink,
+      borderColor: Colors.transparent,
+      padding: AppInsets.cardLarge,
+      child: Row(
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: AppColors.primaryLight,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+            ),
+            child: Center(
+              child: Text(
+                ProfileScreen._initial(name),
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: AppColors.primaryDark,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.lg),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(color: Colors.white),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  email,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Colors.white.withValues(alpha: 0.72),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ProfileItem extends StatelessWidget {
   const _ProfileItem({
     required this.icon,
@@ -169,12 +241,38 @@ class _ProfileItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+    return AppCard(
+      margin: const EdgeInsets.only(bottom: AppSpacing.md),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
       child: ListTile(
-        leading: Icon(icon),
-        title: Text(label),
-        subtitle: Text(value),
+        contentPadding: EdgeInsets.zero,
+        leading: Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: AppColors.primaryLight,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+          ),
+          child: Icon(icon, color: AppColors.primaryDark),
+        ),
+        title: Text(
+          label,
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: AppColors.slate),
+        ),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: AppSpacing.xs),
+          child: Text(
+            value,
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+          ),
+        ),
       ),
     );
   }
@@ -303,26 +401,27 @@ class _EditProfileDialogState extends ConsumerState<_EditProfileDialog> {
     final monthlyAllowance = _allowanceController.text.trim().isEmpty
         ? null
         : num.tryParse(_allowanceController.text);
-    final expectedDailySpend =
-        _expectedDailySpendController.text.trim().isEmpty
-            ? null
-            : num.tryParse(_expectedDailySpendController.text);
+    final expectedDailySpend = _expectedDailySpendController.text.trim().isEmpty
+        ? null
+        : num.tryParse(_expectedDailySpendController.text);
 
     if (_nameController.text.trim().isEmpty ||
         (_allowanceController.text.trim().isNotEmpty &&
             monthlyAllowance == null) ||
         (_expectedDailySpendController.text.trim().isNotEmpty &&
             expectedDailySpend == null)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Lengkapi data profil.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Lengkapi data profil.')));
       return;
     }
 
     setState(() => _isSaving = true);
 
     try {
-      await ref.read(profileRepositoryProvider).updateProfile(
+      await ref
+          .read(profileRepositoryProvider)
+          .updateProfile(
             name: _nameController.text.trim(),
             university: _universityController.text.trim(),
             phoneNumber: _phoneController.text.trim(),
@@ -336,9 +435,9 @@ class _EditProfileDialogState extends ConsumerState<_EditProfileDialog> {
       }
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.toString())),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.toString())));
       }
     } finally {
       if (mounted) {
@@ -429,9 +528,9 @@ class _TimeSkipDialogState extends ConsumerState<_TimeSkipDialog> {
       }
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.toString())),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.toString())));
       }
     } finally {
       if (mounted) {
@@ -442,14 +541,5 @@ class _TimeSkipDialogState extends ConsumerState<_TimeSkipDialog> {
 }
 
 String _currency(Object? value) {
-  final number = value is num ? value : num.tryParse('$value');
-  if (number == null) {
-    return '-';
-  }
-
-  return NumberFormat.currency(
-    locale: 'id_ID',
-    symbol: 'Rp',
-    decimalDigits: 0,
-  ).format(number);
+  return AppFormatters.currency(value, fallback: '-');
 }

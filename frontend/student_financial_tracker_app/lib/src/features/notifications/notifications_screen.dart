@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
+import '../../shared/theme/app_colors.dart';
+import '../../shared/theme/app_spacing.dart';
+import '../../shared/utils/app_formatters.dart';
+import '../../shared/widgets/app_card.dart';
+import '../../shared/widgets/app_state_widgets.dart';
+import '../../shared/widgets/status_pill.dart';
 import 'notifications_repository.dart';
 
 class NotificationsScreen extends ConsumerWidget {
@@ -30,13 +35,20 @@ class NotificationsScreen extends ConsumerWidget {
       body: notifications.when(
         data: (items) {
           if (items.isEmpty) {
-            return const Center(child: Text('Belum ada notifikasi.'));
+            return const AppEmptyState(
+              icon: Icons.notifications_outlined,
+              title: 'Belum ada notifikasi',
+              message: 'Reminder budget dan tabungan akan muncul di sini.',
+            );
           }
 
           return RefreshIndicator(
-            onRefresh: () async => ref.invalidate(notificationsProvider),
+            onRefresh: () async {
+              ref.invalidate(notificationsProvider);
+              await ref.read(notificationsProvider.future);
+            },
             child: ListView.separated(
-              padding: const EdgeInsets.all(16),
+              padding: AppInsets.screen,
               itemCount: items.length,
               separatorBuilder: (_, _) => const SizedBox(height: 12),
               itemBuilder: (context, index) {
@@ -45,12 +57,10 @@ class NotificationsScreen extends ConsumerWidget {
             ),
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Text(error.toString(), textAlign: TextAlign.center),
-          ),
+        loading: () => const AppLoadingState(message: 'Memuat notifikasi...'),
+        error: (error, stackTrace) => AppErrorState(
+          message: error.toString(),
+          onRetry: () => ref.invalidate(notificationsProvider),
         ),
       ),
     );
@@ -61,15 +71,15 @@ class NotificationsScreen extends ConsumerWidget {
       await ref.read(notificationsRepositoryProvider).generate();
       ref.invalidate(notificationsProvider);
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Notifikasi diperbarui.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Notifikasi diperbarui.')));
       }
     } catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.toString())),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.toString())));
       }
     }
   }
@@ -80,9 +90,9 @@ class NotificationsScreen extends ConsumerWidget {
       ref.invalidate(notificationsProvider);
     } catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.toString())),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.toString())));
       }
     }
   }
@@ -103,15 +113,36 @@ class _NotificationTile extends ConsumerWidget {
       background: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
-        color: Colors.redAccent,
+        decoration: BoxDecoration(
+          color: AppColors.danger,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+        ),
         child: const Icon(Icons.delete, color: Colors.white),
       ),
       onDismissed: (_) => _delete(ref),
-      child: Card(
-        margin: EdgeInsets.zero,
+      child: AppCard(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
+        ),
+        borderColor: isUnread
+            ? AppColors.primary.withValues(alpha: 0.24)
+            : AppColors.border,
         child: ListTile(
-          leading: CircleAvatar(
-            child: Icon(_iconForType(notification['type'] as String)),
+          contentPadding: EdgeInsets.zero,
+          leading: Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: _colorForType(
+                notification['type'] as String,
+              ).withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(AppRadius.md),
+            ),
+            child: Icon(
+              _iconForType(notification['type'] as String),
+              color: _colorForType(notification['type'] as String),
+            ),
           ),
           title: Text(
             notification['title'] as String,
@@ -122,12 +153,15 @@ class _NotificationTile extends ConsumerWidget {
           subtitle: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              const SizedBox(height: AppSpacing.xs),
               Text(notification['message'] as String),
-              const SizedBox(height: 4),
+              const SizedBox(height: AppSpacing.xs),
               Text(_formatDate(notification['createdAt'])),
             ],
           ),
-          trailing: isUnread ? const Icon(Icons.fiber_manual_record) : null,
+          trailing: isUnread
+              ? const StatusPill(label: 'Baru', color: AppColors.primary)
+              : null,
           onTap: isUnread ? () => _markAsRead(ref) : null,
         ),
       ),
@@ -157,11 +191,16 @@ class _NotificationTile extends ConsumerWidget {
     };
   }
 
+  Color _colorForType(String type) {
+    return switch (type) {
+      'BUDGET_EXCEEDED' => AppColors.danger,
+      'BUDGET_WARNING' => AppColors.warning,
+      'SAVINGS_REMINDER' => AppColors.savings,
+      _ => AppColors.primary,
+    };
+  }
+
   String _formatDate(Object? value) {
-    final date = DateTime.tryParse('$value');
-    if (date == null) {
-      return '';
-    }
-    return DateFormat.yMMMd('id_ID').add_Hm().format(date.toLocal());
+    return AppFormatters.dateTime(value);
   }
 }

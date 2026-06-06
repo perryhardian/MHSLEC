@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../shared/theme/app_colors.dart';
 import '../auth/auth_controller.dart';
 import '../budgets/budgets_screen.dart';
 import '../dashboard/dashboard_screen.dart';
@@ -21,17 +22,67 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   var _selectedIndex = 0;
 
+  static const _pages = [
+    _PageMeta(
+      title: 'Dashboard',
+      subtitle: 'Ringkasan kondisi keuangan bulan ini',
+      icon: Icons.dashboard_outlined,
+      selectedIcon: Icons.dashboard,
+      label: 'Dashboard',
+    ),
+    _PageMeta(
+      title: 'Transaksi',
+      subtitle: 'Pemasukan dan pengeluaran harian',
+      icon: Icons.receipt_long_outlined,
+      selectedIcon: Icons.receipt_long,
+      label: 'Transaksi',
+    ),
+    _PageMeta(
+      title: 'Budget',
+      subtitle: 'Pantau batas pengeluaran per kategori',
+      icon: Icons.account_balance_wallet_outlined,
+      selectedIcon: Icons.account_balance_wallet,
+      label: 'Budget',
+    ),
+    _PageMeta(
+      title: 'Tabungan',
+      subtitle: 'Target dan progres setoran',
+      icon: Icons.savings_outlined,
+      selectedIcon: Icons.savings,
+      label: 'Tabungan',
+    ),
+    _PageMeta(
+      title: 'Laporan',
+      subtitle: 'Analisis bulanan dan performa budget',
+      icon: Icons.bar_chart_outlined,
+      selectedIcon: Icons.bar_chart,
+      label: 'Laporan',
+    ),
+  ];
+
   @override
   Widget build(BuildContext context) {
+    final page = _pages[_selectedIndex];
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(switch (_selectedIndex) {
-          0 => 'Dashboard',
-          1 => 'Transaksi',
-          2 => 'Budget',
-          3 => 'Tabungan',
-          _ => 'Laporan',
-        }),
+        titleSpacing: 16,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(page.title),
+            const SizedBox(height: 2),
+            Text(
+              page.subtitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppColors.slate,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
         actions: [
           Consumer(
             builder: (context, ref, _) {
@@ -56,20 +107,39 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               );
             },
           ),
-          IconButton(
-            tooltip: 'Profil',
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => const ProfileScreen(),
+          PopupMenuButton<String>(
+            tooltip: 'Menu akun',
+            icon: const Icon(Icons.account_circle_outlined),
+            onSelected: (value) {
+              if (value == 'profile') {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const ProfileScreen(),
+                  ),
+                );
+              }
+              if (value == 'logout') {
+                ref.read(authControllerProvider.notifier).logout();
+              }
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: 'profile',
+                child: ListTile(
+                  leading: Icon(Icons.person_outline),
+                  title: Text('Profil'),
+                ),
               ),
-            ),
-            icon: const Icon(Icons.person_outline),
+              PopupMenuItem(
+                value: 'logout',
+                child: ListTile(
+                  leading: Icon(Icons.logout),
+                  title: Text('Logout'),
+                ),
+              ),
+            ],
           ),
-          IconButton(
-            tooltip: 'Logout',
-            onPressed: () => ref.read(authControllerProvider.notifier).logout(),
-            icon: const Icon(Icons.logout),
-          ),
+          const SizedBox(width: 6),
         ],
       ),
       body: IndexedStack(
@@ -82,39 +152,42 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ReportsScreen(),
         ],
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _selectedIndex,
-        onDestinationSelected: (index) {
-          setState(() => _selectedIndex = index);
-        },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.dashboard_outlined),
-            selectedIcon: Icon(Icons.dashboard),
-            label: 'Dashboard',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.receipt_long_outlined),
-            selectedIcon: Icon(Icons.receipt_long),
-            label: 'Transaksi',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.account_balance_wallet_outlined),
-            selectedIcon: Icon(Icons.account_balance_wallet),
-            label: 'Budget',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.savings_outlined),
-            selectedIcon: Icon(Icons.savings),
-            label: 'Tabungan',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.bar_chart_outlined),
-            selectedIcon: Icon(Icons.bar_chart),
-            label: 'Laporan',
-          ),
-        ],
+      bottomNavigationBar: DecoratedBox(
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          border: Border(top: BorderSide(color: AppColors.border)),
+        ),
+        child: NavigationBar(
+          selectedIndex: _selectedIndex,
+          onDestinationSelected: (index) {
+            setState(() => _selectedIndex = index);
+          },
+          destinations: [
+            for (final page in _pages)
+              NavigationDestination(
+                icon: Icon(page.icon),
+                selectedIcon: Icon(page.selectedIcon),
+                label: page.label,
+              ),
+          ],
+        ),
       ),
     );
   }
+}
+
+class _PageMeta {
+  const _PageMeta({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.selectedIcon,
+    required this.label,
+  });
+
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final IconData selectedIcon;
+  final String label;
 }

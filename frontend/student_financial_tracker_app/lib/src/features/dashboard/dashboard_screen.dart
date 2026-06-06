@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
+import '../../shared/theme/app_colors.dart';
+import '../../shared/theme/app_spacing.dart';
+import '../../shared/utils/app_formatters.dart';
+import '../../shared/widgets/app_card.dart';
+import '../../shared/widgets/app_state_widgets.dart';
+import '../../shared/widgets/finance_charts.dart';
+import '../../shared/widgets/status_pill.dart';
 import 'dashboard_repository.dart';
 
 class DashboardScreen extends ConsumerWidget {
@@ -12,17 +18,18 @@ class DashboardScreen extends ConsumerWidget {
     final dashboard = ref.watch(dashboardProvider);
 
     return dashboard.when(
-        data: (data) => _DashboardContent(data: data),
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Text(
-              error.toString(),
-              textAlign: TextAlign.center,
-            ),
-          ),
-        ),
+      data: (data) => RefreshIndicator(
+        onRefresh: () async {
+          ref.invalidate(dashboardProvider);
+          await ref.read(dashboardProvider.future);
+        },
+        child: _DashboardContent(data: data),
+      ),
+      loading: () => const AppLoadingState(message: 'Memuat dashboard...'),
+      error: (error, stackTrace) => AppErrorState(
+        message: error.toString(),
+        onRetry: () => ref.invalidate(dashboardProvider),
+      ),
     );
   }
 }
@@ -34,194 +41,151 @@ class _DashboardContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final summary = data['summary'] as Map<String, dynamic>;
-    final score = data['financialHealthScore'] as Map<String, dynamic>;
-    final period = data['period'] as Map<String, dynamic>;
-    final budgets = (data['budgets'] as List<dynamic>);
-    final expenses = (data['expenseByCategory'] as List<dynamic>);
+    final summary = _map(data['summary']);
+    final period = _map(data['period']);
+    final expenses = _list(data['expenseByCategory']);
+    final savingsGoals = _list(data['savingsGoals']);
+    final savingsSummary = _map(data['savingsSummary']);
 
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: AppInsets.screen,
       children: [
-        _DateCard(period: period),
-        const SizedBox(height: 12),
-        _ScoreCard(score: score),
-        const SizedBox(height: 12),
-        _ScoreBreakdownCard(score: score),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _MetricCard(
-                title: 'Pemasukan',
-                value: _currency(summary['totalIncome']),
-                icon: Icons.south_west,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _MetricCard(
-                title: 'Pengeluaran',
-                value: _currency(summary['totalExpense']),
-                icon: Icons.north_east,
-              ),
-            ),
-          ],
+        _BalanceHero(summary: summary, period: period),
+        const SizedBox(height: 26),
+        _SavingsTargetSummarySection(
+          goals: savingsGoals,
+          savingsSummary: savingsSummary,
         ),
-        const SizedBox(height: 12),
-        _MetricCard(
-          title: 'Sisa Uang Bulanan',
-          value: _currency(summary['remainingMoney']),
-          icon: Icons.savings,
-        ),
-        const SizedBox(height: 18),
-        Text('Budget', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
-        if (budgets.isEmpty)
-          const Text('Belum ada budget aktif.')
-        else
-          ...budgets.take(3).map((item) {
-            final budget = item as Map<String, dynamic>;
-            return _ProgressTile(
-              title: budget['name'] as String,
-              subtitle: '${budget['usagePercentage']}% terpakai',
-              progress: ((budget['usagePercentage'] as num) / 100).clamp(0, 1),
-            );
-          }),
-        const SizedBox(height: 18),
-        Text('Pengeluaran Terbesar',
-            style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
-        if (expenses.isEmpty)
-          const Text('Belum ada pengeluaran bulan ini.')
-        else
-          ...expenses.take(5).map((item) {
-            final expense = item as Map<String, dynamic>;
-            return ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.category),
-              title: Text(expense['categoryName'] as String),
-              trailing: Text(_currency(expense['amount'])),
-            );
-          }),
+        const SizedBox(height: 34),
+        _ExpenseChartSection(expenses: expenses),
       ],
     );
   }
-
-  static String _currency(Object? value) {
-    final number = value is num ? value : num.tryParse('$value') ?? 0;
-    return NumberFormat.currency(
-      locale: 'id_ID',
-      symbol: 'Rp',
-      decimalDigits: 0,
-    ).format(number);
-  }
 }
 
-class _DateCard extends StatelessWidget {
-  const _DateCard({required this.period});
+class _BalanceHero extends StatefulWidget {
+  const _BalanceHero({required this.summary, required this.period});
 
+  final Map<String, dynamic> summary;
   final Map<String, dynamic> period;
 
   @override
-  Widget build(BuildContext context) {
-    final startDate = DateTime.tryParse('${period['startDate']}');
-    final endDate = DateTime.tryParse('${period['endDate']}');
-    final currentDate = DateTime.tryParse('${period['currentDate']}');
-    final month = period['month'];
-    final year = period['year'];
-    final label = startDate == null || endDate == null
-        ? 'Periode $month/$year'
-        : DateFormat.yMMMM('id_ID').format(startDate.toLocal());
-    final range = startDate == null || endDate == null
-        ? ''
-        : '${DateFormat.yMMMd('id_ID').format(startDate.toLocal())} - ${DateFormat.yMMMd('id_ID').format(endDate.toLocal())}';
-    final today = currentDate == null
-        ? '-'
-        : DateFormat.yMMMMEEEEd('id_ID').format(currentDate.toLocal());
-
-    return Card(
-      margin: EdgeInsets.zero,
-      child: ListTile(
-        leading: const Icon(Icons.calendar_today_outlined),
-        title: Text(label),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Hari ini: $today'),
-            if (range.isNotEmpty) Text('Periode: $range'),
-          ],
-        ),
-      ),
-    );
-  }
+  State<_BalanceHero> createState() => _BalanceHeroState();
 }
 
-class _ScoreBreakdownCard extends StatelessWidget {
-  const _ScoreBreakdownCard({required this.score});
-
-  final Map<String, dynamic> score;
+class _BalanceHeroState extends State<_BalanceHero> {
+  var _isVisible = true;
 
   @override
   Widget build(BuildContext context) {
-    final breakdown = score['breakdown'] as Map<String, dynamic>?;
-    if (breakdown == null) {
-      return const SizedBox.shrink();
-    }
+    final startDate = DateTime.tryParse('${widget.period['startDate']}');
+    final currentDate = DateTime.tryParse('${widget.period['currentDate']}');
+    final periodLabel = startDate == null
+        ? 'Periode ${widget.period['month']}/${widget.period['year']}'
+        : AppFormatters.month(startDate.toLocal());
+    final today = currentDate == null
+        ? 'Hari ini'
+        : AppFormatters.fullDate(currentDate.toLocal());
+    final remaining = AppFormatters.currency(widget.summary['remainingMoney']);
+    final income = AppFormatters.currency(widget.summary['totalIncome']);
+    final expense = AppFormatters.currency(widget.summary['totalExpense']);
 
-    final needsInput = breakdown['needsExpectedDailySpendInput'] == true;
-
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Detail Score', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 10),
-            if (needsInput) ...[
-              const Text('Isi expected spend per hari di Profil.'),
-              const SizedBox(height: 8),
+    return AppCard(
+      padding: AppInsets.cardLarge,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryLight,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+                child: const Icon(
+                  Icons.account_balance_wallet_outlined,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      periodLabel,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    Text(
+                      today,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: AppColors.slate),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                onPressed: () => setState(() => _isVisible = !_isVisible),
+                tooltip: _isVisible ? 'Sembunyikan saldo' : 'Tampilkan saldo',
+                icon: Icon(
+                  _isVisible
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
+                ),
+              ),
             ],
-            _MetricLine(
-              label: 'Uang per hari',
-              value: _DashboardContent._currency(
-                breakdown['availableDailyMoney'],
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          Text(
+            'Total Balance',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: AppColors.slate,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              _isVisible ? remaining : 'Rp********',
+              maxLines: 1,
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                color: AppColors.ink,
+                fontWeight: FontWeight.w900,
               ),
             ),
-            _MetricLine(
-              label: 'Sub score harian',
-              value: '${breakdown['dailyCapacityScore']} / 70',
-            ),
-            _MetricLine(
-              label: 'Budget score',
-              value: '${breakdown['budgetScore']} / 30',
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _MetricLine extends StatelessWidget {
-  const _MetricLine({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Expanded(child: Text(label)),
-          Text(
-            value,
-            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Row(
+            children: [
+              Expanded(
+                child: _HeroMiniStat(
+                  icon: Icons.south_west_rounded,
+                  label: 'Income',
+                  value: _isVisible ? income : 'Rp****',
+                  color: AppColors.success,
+                  backgroundColor: AppColors.successSoft,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: _HeroMiniStat(
+                  icon: Icons.north_east_rounded,
+                  label: 'Expense',
+                  value: _isVisible ? expense : 'Rp****',
+                  color: AppColors.danger,
+                  backgroundColor: AppColors.dangerSoft,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -229,106 +193,331 @@ class _MetricLine extends StatelessWidget {
   }
 }
 
-class _ScoreCard extends StatelessWidget {
-  const _ScoreCard({required this.score});
-
-  final Map<String, dynamic> score;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Row(
-          children: [
-            CircleAvatar(
-              radius: 30,
-              child: Text('${score['score']}'),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Financial Health Score'),
-                  Text(
-                    score['label'] as String,
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _MetricCard extends StatelessWidget {
-  const _MetricCard({
-    required this.title,
-    required this.value,
+class _HeroMiniStat extends StatelessWidget {
+  const _HeroMiniStat({
     required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+    required this.backgroundColor,
   });
 
-  final String title;
-  final String value;
   final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+  final Color backgroundColor;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon),
-            const SizedBox(height: 10),
-            Text(title),
-            const SizedBox(height: 4),
-            Text(
-              value,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: backgroundColor,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+            ),
+            child: Icon(icon, color: color),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.slate,
                     fontWeight: FontWeight.w700,
                   ),
+                ),
+                const SizedBox(height: 2),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    value,
+                    maxLines: 1,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ProgressTile extends StatelessWidget {
-  const _ProgressTile({
-    required this.title,
-    required this.subtitle,
-    required this.progress,
-  });
-
-  final String title;
-  final String subtitle;
-  final num progress;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      title: Text(title),
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(subtitle),
-          const SizedBox(height: 6),
-          LinearProgressIndicator(value: progress.toDouble()),
+          ),
         ],
       ),
     );
   }
+}
+
+class _SavingsTargetSummarySection extends StatelessWidget {
+  const _SavingsTargetSummarySection({
+    required this.goals,
+    required this.savingsSummary,
+  });
+
+  final List<Map<String, dynamic>> goals;
+  final Map<String, dynamic> savingsSummary;
+
+  @override
+  Widget build(BuildContext context) {
+    final goalCount = AppFormatters.numberOrZero(
+      savingsSummary['goalsCount'],
+    ).toInt();
+    final averageProgress = AppFormatters.numberOrZero(
+      savingsSummary['averageProgressPercentage'],
+    ).clamp(0, 100);
+    final primaryGoal = goals.isEmpty ? null : goals.first;
+    final primaryGoalName = primaryGoal == null
+        ? 'Belum ada target'
+        : '${primaryGoal['name'] ?? 'Target tabungan'}';
+    final primaryGoalProgress = primaryGoal == null
+        ? averageProgress
+        : AppFormatters.numberOrZero(
+            primaryGoal['progressPercentage'],
+          ).clamp(0, 100);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: AppColors.savingsSoft,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+                child: const Icon(
+                  Icons.savings_outlined,
+                  color: AppColors.savings,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Target pencapaian',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    Text(
+                      '$goalCount target dibuat',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: AppColors.slate),
+                    ),
+                  ],
+                ),
+              ),
+              StatusPill(
+                label: '${averageProgress.toStringAsFixed(0)}%',
+                color: AppColors.savings,
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Text(
+            primaryGoalName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            child: LinearProgressIndicator(
+              minHeight: 9,
+              value: primaryGoalProgress / 100,
+              color: AppColors.savings,
+              backgroundColor: AppColors.savingsSoft,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  primaryGoal == null
+                      ? 'Buat target tabungan untuk mulai memantau progress.'
+                      : '${AppFormatters.currency(primaryGoal['currentAmount'])} dari ${AppFormatters.currency(primaryGoal['targetAmount'])}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: AppColors.slate),
+                ),
+              ),
+              Text(
+                '${primaryGoalProgress.toStringAsFixed(0)}% tercapai',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppColors.savings,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ExpenseChartSection extends StatelessWidget {
+  const _ExpenseChartSection({required this.expenses});
+
+  final List<Map<String, dynamic>> expenses;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Pengeluaran terbesar',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                'Kategori yang paling banyak menyerap uang bulan ini',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: AppColors.slate),
+              ),
+            ],
+          ),
+        ),
+        if (expenses.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
+            child: Text('Belum ada pengeluaran bulan ini.'),
+          )
+        else
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final segments = _segments(expenses.take(5).toList());
+              final chart = DonutChart(
+                segments: segments,
+                centerTitle: 'Total',
+                centerValue: AppFormatters.compactNumber(
+                  expenses.fold<num>(
+                    0,
+                    (total, item) =>
+                        total + AppFormatters.numberOrZero(item['amount']),
+                  ),
+                ),
+              );
+              final detail = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ChartLegend(segments: segments),
+                  const SizedBox(height: AppSpacing.md),
+                  for (final item in expenses.take(5))
+                    _CategoryAmountRow(
+                      name: '${item['categoryName'] ?? 'Kategori'}',
+                      value: AppFormatters.currency(item['amount']),
+                    ),
+                ],
+              );
+
+              if (constraints.maxWidth >= 520) {
+                return Row(
+                  children: [
+                    chart,
+                    const SizedBox(width: AppSpacing.xl),
+                    Expanded(child: detail),
+                  ],
+                );
+              }
+
+              return Column(
+                children: [
+                  Center(child: chart),
+                  const SizedBox(height: AppSpacing.lg),
+                  detail,
+                ],
+              );
+            },
+          ),
+      ],
+    );
+  }
+
+  static List<ChartSegment> _segments(List<Map<String, dynamic>> items) {
+    const colors = [
+      AppColors.primary,
+      Color(0xFF1F9D55),
+      Color(0xFFD4A017),
+      Color(0xFF334155),
+      AppColors.accent,
+    ];
+
+    return [
+      for (var index = 0; index < items.length; index++)
+        ChartSegment(
+          label: '${items[index]['categoryName'] ?? 'Kategori'}',
+          value: AppFormatters.numberOrZero(items[index]['amount']).toDouble(),
+          color: colors[index % colors.length],
+        ),
+    ];
+  }
+}
+
+class _CategoryAmountRow extends StatelessWidget {
+  const _CategoryAmountRow({required this.name, required this.value});
+
+  final String name;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
+          ),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.w800)),
+        ],
+      ),
+    );
+  }
+}
+
+Map<String, dynamic> _map(Object? value) {
+  return value is Map<String, dynamic> ? value : <String, dynamic>{};
+}
+
+List<Map<String, dynamic>> _list(Object? value) {
+  if (value is! List<dynamic>) {
+    return [];
+  }
+
+  return value
+      .whereType<Map<String, dynamic>>()
+      .map((item) => Map<String, dynamic>.from(item))
+      .toList();
 }
